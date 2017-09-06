@@ -79,19 +79,35 @@ if(isset($_GET['page'])) {
 				$errors[] = 'Mulai bekerja harus di isi.';
 			}
 
-			if (empty($errors)) {
-				// tambahkan data ke database
+			if (empty($errors)) { 
+				/*
+				Tambahkan data karyawan ke database
 
-				// // cara penulisan pertama
-				// $sql = "INSERT INTO karyawan (nama_depan,nama_belakang,jenis_kelamin,email,jabatan,alamat,mulai_bekerja) VALUES ('".$_POST['nama_depan']."','".$_POST['nama_belakang']."','".$_POST['jenis_kelamin']."','".$_POST['email']."','".$_POST['jabatan']."','".$_POST['alamat']."','".$_POST['mulai_bekerja']."')";
+				Karena ada input data dari user ke database, gunakan mysqli prepared statements untuk pencegahan sql injection/hack.
+				http://us3.php.net/manual/en/mysqli-stmt.prepare.php
+				*/
+				$stmt = mysqli_stmt_init($conn);
 
-				// cara penulisan kedua
-				$sql = "INSERT INTO karyawan (nama_depan,nama_belakang,jenis_kelamin,email,jabatan,alamat,mulai_bekerja) VALUES ('$_POST[nama_depan]','$_POST[nama_belakang]','$_POST[jenis_kelamin]','$_POST[email]','$_POST[jabatan]','$_POST[alamat]','$_POST[mulai_bekerja]')";
+				$sql = "INSERT INTO karyawan (nama_depan,nama_belakang,jenis_kelamin,email,jabatan,alamat,mulai_bekerja) VALUES (?,?,?,?,?,?,?)";
 
-				if (mysqli_query($conn, $sql)) {
-					$notifikasi = 'Karyawan berhasil di tambahkan.';
+				if (mysqli_stmt_prepare($stmt, $sql)) {
+				
+					mysqli_stmt_bind_param($stmt, 'sssssss', $_POST['nama_depan'], $_POST['nama_belakang'], $_POST['jenis_kelamin'], $_POST['email'], $_POST['jabatan'], $_POST['alamat'], $_POST['mulai_bekerja']);
+
+				    mysqli_stmt_execute($stmt);
+
+				    if (mysqli_stmt_affected_rows($stmt) == 1) {
+						$notifikasi = 'Karyawan berhasil di tambahkan.';
+				    } else {
+						$notifikasi = 'Karyawan gagal di tambahkan.';
+				    }
+				
+				    mysqli_stmt_close($stmt);
+
 				} else {
-					die('gagal menambahkan data: '.mysqli_error($conn));
+				
+					die('MySQL Error: '.mysqli_error($conn));
+				
 				}
 			}
 		}
@@ -177,21 +193,41 @@ if(isset($_GET['page'])) {
 
 		// start penanganan delete karyawan
 		if (isset($_GET['delete']) && !empty($_GET['delete'])) {
-			
-			$sql = "DELETE FROM karyawan WHERE id=$_GET[delete]";
-			mysqli_query($conn, $sql);
+			/*
+			Karena ada input data dari user ke database, gunakan mysqli prepared statements untuk pencegahan sql injection/hack.
+			http://us3.php.net/manual/en/mysqli-stmt.prepare.php
+			*/
+			$stmt = mysqli_stmt_init($conn);
 
-			if (mysqli_affected_rows($conn) == 1) {
-			    $notifikasi = 'Karyawan berhasil dihapus.';
+			$sql = "DELETE FROM karyawan WHERE id=?";
+
+			if (mysqli_stmt_prepare($stmt, $sql)) {
+				
+				mysqli_stmt_bind_param($stmt, 'i', $_GET['delete']);
+
+			    mysqli_stmt_execute($stmt);
+
+			    if (mysqli_stmt_affected_rows($stmt) == 1) {
+					$notifikasi = 'Karyawan berhasil dihapus.';
+			    } else {
+					$notifikasi = 'Tidak ada karyawan dengan id tersebut';
+			    }
+
+			    mysqli_stmt_close($stmt);
+
 			} else {
-			    $notifikasi = 'Karyawan gagal dihapus.';
+
+				die('MySQL Error: '.mysqli_error($conn));
+
 			}
 		}
 		// end penanganan delete karyawan
 
-		// ambil data karyawan dari database
+		// Ambil data semua karyawan dari database
 		$sql = 'SELECT * FROM karyawan';
+
 		$query = mysqli_query($conn,$sql);
+		
 		$data = mysqli_fetch_all($query,MYSQLI_ASSOC);
 		?>
 
@@ -255,15 +291,9 @@ if(isset($_GET['page'])) {
 
 	// request page show
 	} elseif($_GET['page'] == 'show' && !empty($_GET['id'])) {
-		
-		// ambil data karyawan dari database
-		$sql = "SELECT * FROM karyawan WHERE id=$_GET[id]";
-		$query = mysqli_query($conn, $sql);
-		$data = mysqli_fetch_assoc($query);
 
-		if (!$data) {
-			die('Karyawan tidak ditemukan');
-		}
+		// Ambil data karyawan dari database
+		$data = get_karyawan($conn,$_GET['id']);
 		?>
 
 		<!-- output/tampilkan -->
@@ -295,7 +325,7 @@ if(isset($_GET['page'])) {
 				</tr>
 				<tr>
 					<td>Alamat</td>
-					<td><a href="https://www.google.com/maps?q=<?php echo $data['alamat'] ?>"><?php echo $data['alamat']; ?></a></td>
+					<td><a href="https://www.google.com/maps?q=<?php echo $data['alamat']; ?>"><?php echo $data['alamat']; ?></a></td>
 				</tr>
 				<tr>
 					<td>Mulai Bekerja</td>
@@ -308,14 +338,8 @@ if(isset($_GET['page'])) {
 	// request page edit
 	} elseif($_GET['page'] == 'edit' && !empty($_GET['id'])) {
 
-		// ambil data karyawan dari database
-		$sql = "SELECT * FROM karyawan WHERE id=$_GET[id]";
-		$query = mysqli_query($conn,$sql);
-		$data = mysqli_fetch_assoc($query);
-
-		if(!$data) {
-			die('Karyawan tidak ditemukan');
-		}
+		// Ambil data karyawan dari database
+		$data = get_karyawan($conn,$_GET['id']);
 
 		// request post
 		if (isset($_POST['submit'])) {
@@ -344,23 +368,41 @@ if(isset($_GET['page'])) {
 			}
 
 			if (empty($errors)) {
-				// update data karyawan ke database
-				$sql = "UPDATE karyawan SET nama_depan='$_POST[nama_depan]',nama_belakang='$_POST[nama_belakang]',jenis_kelamin='$_POST[jenis_kelamin]',email='$_POST[email]',jabatan='$_POST[jabatan]',alamat='$_POST[alamat]',mulai_bekerja='$_POST[mulai_bekerja]' WHERE id=$_GET[id]";
 
-				if (mysqli_query($conn, $sql)) {
-					$notifikasi = 'Karyawan berhasil di edit.';
+				/*
+				Update data karyawan ke database
+
+				Karena ada input data dari user ke database, gunakan mysqli prepared statements untuk pencegahan sql injection/hack.
+				http://us3.php.net/manual/en/mysqli-stmt.prepare.php
+				*/
+				$stmt = mysqli_stmt_init($conn);
+
+				$sql = "UPDATE karyawan SET nama_depan=?,nama_belakang=?,jenis_kelamin=?,email=?,jabatan=?,alamat=?,mulai_bekerja=? WHERE id=?";
+
+				if (mysqli_stmt_prepare($stmt, $sql)) {
+				
+					mysqli_stmt_bind_param($stmt, 'sssssssi', $_POST['nama_depan'], $_POST['nama_belakang'], $_POST['jenis_kelamin'], $_POST['email'], $_POST['jabatan'], $_POST['alamat'], $_POST['mulai_bekerja'],$_GET['id']);
+
+				    mysqli_stmt_execute($stmt);
 					
-					// ambil data karyawan dari database
-					$sql = "SELECT * FROM karyawan WHERE id=$_GET[id]";
-					$query = mysqli_query($conn,$sql);
-					$data = mysqli_fetch_assoc($query);
+					$affected_rows = mysqli_stmt_affected_rows($stmt);
+					
+					mysqli_stmt_close($stmt);
 
-					if(!$data) {
-						die('Karyawan tidak ditemukan');
-					}
+				    if ($affected_rows == 1) {
+						$notifikasi = 'Karyawan berhasil di edit.';
 
+						// Ambil data karyawan dari database
+						$data = get_karyawan($conn,$_GET['id']);
+				    
+				    } else {
+						$notifikasi = 'Karyawan tidak ada perubahan';
+				    }
+					
 				} else {
-					die('gagal update data: '.mysqli_error($conn));
+				
+					die('MySQL Error: '.mysqli_error($conn));
+				
 				}
 			}
 		}
@@ -468,5 +510,41 @@ function cek_selected($errors, $name, $value, $data = '') {
 	*/
 	if ((!$errors) && ($data) && $data[$name] == $value) {
 		echo 'selected';
+	}
+}
+
+function get_karyawan($conn, $id) {
+	/*
+	Ambil data karyawan dari database
+
+	Karena ada input data dari user ke database, gunakan mysqli prepared statements untuk pencegahan sql injection/hack.
+	http://us3.php.net/manual/en/mysqli-stmt.prepare.php
+	*/	
+	$stmt = mysqli_stmt_init($conn);
+
+	$sql = "SELECT * FROM karyawan WHERE id=?";
+
+	if (mysqli_stmt_prepare($stmt, $sql)) {
+		
+		mysqli_stmt_bind_param($stmt, 'i', $id);
+
+	    mysqli_stmt_execute($stmt);
+		
+		$result = mysqli_stmt_get_result($stmt);
+		
+		$data = mysqli_fetch_assoc($result);
+	    
+	    mysqli_stmt_close($stmt);
+		
+		if ($data) {
+			return $data;
+		}
+
+		die('Karyawan tidak ditemukan');
+
+	} else {
+
+		die('MySQL Error: '.mysqli_error($conn));
+
 	}
 }
